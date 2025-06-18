@@ -161,7 +161,7 @@
       加载中...
     </ul>
   </div>
-  <!-- <div id="loading" class="hide">处理中...</div> -->
+  <div id="loading" class="hide"></div>
   <div class="dialog-overlay" id="dialog">
     <div class="dialog-content">
       <h3 id="dialog-title">输入信息</h3>
@@ -173,7 +173,9 @@
     </div>
   </div>
   <script>
-    // 全局变量
+    console.log('Github Files - By Zatursure');
+    console.log('Star my project: https://github.com/Zatursure/GHFiles');
+
     window.baseRepo = localStorage.getItem('GITHUB_REPO_URL')
     window.baseToken = localStorage.getItem('GITHUB_TOKEN')
     window.paths = []
@@ -350,7 +352,7 @@
         return;
       }
       const file = e.target.files[0]
-      if (file) putFile(paths.length ? (paths[paths.length - 1] + '/' + file.name) : file.name, file)
+      if (file) ZATputFile(paths.length ? (paths[paths.length - 1] + '/' + file.name) : file.name, file)
       document.getElementById('file').value = ''
     })
 
@@ -441,7 +443,7 @@
       })
     }
 
-    function putFile(path, file) {
+    function ZATputFile(path, file) {
       console.log('upload file:', file)
       getSha(path).then(sha => {
         if (sha && !window.confirm('已存在改文件, 是否覆盖?')) return
@@ -500,35 +502,35 @@
       if (/\.(zip|rar|7z|tar\.gz|tar\.bz2)$/i.test(val)) return 'zip'
       return 'other'
     }
-
+    // 文件大小转换
     function getUnit(bytes, decimals = 2) {
       if (bytes === 0) return '0B';
-
+      // 直接返回0B
       const k = 1024;
       const dm = decimals < 0 ? 0 : decimals;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-
+      // 计算bytes的对数，确定单位
       return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + '' + sizes[i];
     }
 
     function showLoading(val) {
       const loading = document.getElementById('loading');
-      loading.innerHTML = val || '处理中...';
+      if (!loading) return; // 添加空值检查
+      loading.innerHTML = val || '';
       loading.classList.remove('hide');
-      // 触发重绘以启动动画
-      loading.offsetHeight;
+      loading.offsetHeight; // 触发重绘以启动动画
       loading.classList.add('show');
     }
 
     function hideLoading() {
       const loading = document.getElementById('loading');
+      if (!loading) return; // 添加空值检查
       loading.classList.remove('show');
       setTimeout(() => {
         loading.classList.add('hide');
       }, 300);
     }
-
 
   </script>
 
