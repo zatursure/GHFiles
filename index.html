@@ -10,15 +10,18 @@
   <!-- <script src="https://cdn.bootcdn.net/ajax/libs/dayjs/1.11.7/dayjs.min.js"></script> -->
   <!-- <script src="https://cdn.jsdelivr.net/npm/js-base64@3.7.5/base64.min.js"></script> -->
   <style>
+    /* 基础样式 */
     * {margin: 0; padding:0; box-sizing: border-box;}
-    html {
-      padding:20px 0 10px;
-    }
-    body { font-size: 16px;max-width: 80%;  margin: 0 auto; }
-    h2 {margin-bottom: 10px;}
-    .back {display: inline-block;border: 1px solid #ddd; padding: 4px 8px;font-size: 15px; font-weight: normal;    cursor: pointer; margin-left: 20px; margin-top: 0;}
-    input.back { cursor: auto; }
-    .ftr {float: right;}
+    html { padding:20px 0 10px; }
+    body { font-size: 16px; max-width: 80%; margin: 0 auto; }
+    
+    /* 布局相关 */
+    h2, h4 { overflow: hidden; margin-bottom: 20px; }
+    h2 { padding: 10px 0; border-bottom: 1px solid #ccc; }
+    .back { display: inline-block; border: 1px solid #ddd; padding: 4px 8px; font-size: 15px; cursor: pointer; margin-left: 20px; margin-top: 0; }
+    .ftr { float: right; }
+    
+    /* 文件列表样式 */
     .file_list li { line-height:40px;border-bottom: 1px solid #ddd;display: flex; align-items: center;padding: 6px 0;}
     .w50 .file_list li { float: left;width: 31%;margin-right:2%;}
     .w50 .file_list li span.sha { display: none;}
@@ -55,7 +58,6 @@
     button span{ color: #f33; display: block;}
     #file{ display: none;}
     h4 { overflow: hidden; margin-bottom: 20px;}
-    h2 { padding: 10px 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; overflow: hidden; }
     .tip {color: #999; font-size: 12px; margin-left: 20px;}
     i {
       font-style: normal;
@@ -73,23 +75,67 @@
       justify-content: center;
       align-items: center;
       z-index: 1000;
+      transition: opacity 0.3s ease;
+      opacity: 0;
     }
     .dialog-content {
       background: white;
       padding: 20px;
       border-radius: 5px;
       min-width: 300px;
+      transform: translateY(-20px);
+      transition: transform 0.3s ease;
     }
-    .dialog-content input {
-      width: 100%;
-      margin: 10px 0;
+    .dialog-overlay.show {
+      opacity: 1;
     }
-    .dialog-content .btn-group {
-      text-align: right;
-      margin-top: 15px;
+    .dialog-overlay.show .dialog-content {
+      transform: translateY(0);
     }
-    .dialog-content .btn-group button {
-      margin-left: 10px;
+    #loading {
+      transition: opacity 0.3s ease;
+      opacity: 0;
+    }
+    
+    #loading.show {
+      opacity: 1;
+    }
+
+    /* 添加动画相关样式 */
+    .file_list li {
+      transition: all 0.3s ease;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #loading:before {
+      content: '';
+      box-sizing: border-box;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 30px;
+      height: 30px;
+      margin-top: -15px;
+      margin-left: -15px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      animation: spin 0.6s linear infinite;
     }
   </style>
 </head>
@@ -122,40 +168,19 @@
       <input type="text" id="dialog-input" placeholder="">
       <div class="btn-group">
         <button onclick="closeDialog()">取消</button>
-        <button onclick="confirmDialog()">确定</button>
+        <button onclick="cmDialog()">确定</button>
       </div>
     </div>
   </div>
-
   <script>
-    window.baseRepo = localStorage.getItem('GIT_REPO')
-    window.baseToken = localStorage.getItem('GIT_TOKEN')
+    // 全局变量
+    window.baseRepo = localStorage.getItem('GITHUB_REPO_URL')
+    window.baseToken = localStorage.getItem('GITHUB_TOKEN')
+    window.paths = []
+    window.fileList = []
+    window.dialogCallback = null
     
-    // 修改检查逻辑，同步显示仓库信息
-    function checkInit() {
-      if (!baseRepo) {
-        const repo = prompt('首次使用，请输入仓库地址，格式：{owner}/{repo}', '')
-        if (repo) {
-          localStorage.setItem('GIT_REPO', repo)
-          baseRepo = repo
-          document.getElementById('rootdm').value = repo
-          location.reload()
-        }
-        return false
-      }
-      // 初始化时同步显示仓库信息
-      document.getElementById('rootdm').value = baseRepo
-      return true
-    }
-
-    function changeRepo() {
-      const repo = document.getElementById('rootdm').value.trim()
-      if(!repo) return alert('请输入仓库地址')
-      localStorage.setItem('GIT_REPO', repo)
-      baseRepo = repo
-      getDir('', true)
-    }
-
+    // API请求配置
     window.request = axios.create({
       baseURL: 'https://api.github.com/',
       timeout: 10000,
@@ -176,13 +201,35 @@
       return Promise.reject(error);
     });
 
+    // 修改检查逻辑，同步显示仓库信息
+    function ZATcheckInit() {
+      if (!baseRepo) {
+        const repo = prompt('首次使用，请输入仓库地址，格式：{owner}/{repo}', '')
+        if (repo) {
+          localStorage.setItem('GITHUB_REPO_URL', repo)
+          baseRepo = repo
+          document.getElementById('rootdm').value = repo
+          location.reload()
+        }
+        return false
+      }
+      // 初始化时同步显示仓库信息
+      document.getElementById('rootdm').value = baseRepo
+      return true
+    }
+
+    function changeRepo() {
+      const repo = document.getElementById('rootdm').value.trim()
+      if(!repo) return alert('请输入仓库地址')
+      localStorage.setItem('GITHUB_REPO_URL', repo)
+      baseRepo = repo
+      getDir('', true)
+    }
+
     window.paths = []
     window.en = Base64.encode
     window.de = Base64.decode
 
-    
-    
-    window.fileList = []
     function initFileList(searchVal) {
       let tempList = window.fileList.filter(item => {
         if (!paths.length && item.name === 'index.html') return false
@@ -196,7 +243,7 @@
         return `<li class="file ${item.ftype}">
             <a target="_blank" href="${fileUrl}" onclick="getDir('${item.type == 'dir' ? item.path : ''}', false, event)">${item.name}</a>
             <span class="size">${getUnit(item.size)}</span>
-            ${baseToken ? `<i onclick="delOne('${item.path}', '${item.sha}')" class="del">删除</i>` : ''}
+            ${baseToken ? `<i onclick="ZatursuredelOne('${item.path}', '${item.sha}')" class="del">删除</i>` : ''}
           </li>`
       }).join('')
 
@@ -207,7 +254,7 @@
     if (baseRepo) getDir('', true)
     
     function getDir(path, isRoot, event, isBack) {
-      if (!checkInit()) return
+      if (!ZATcheckInit()) return
       if (!path && !isRoot) return
       if (event) event.preventDefault()
       showLoading()
@@ -224,22 +271,29 @@
       })
     }
 
-    let dialogCallback = null;
-
+    // 对话框相关函数
     function showDialog(title, placeholder, defaultValue, callback) {
       document.getElementById('dialog-title').textContent = title;
       document.getElementById('dialog-input').placeholder = placeholder;
       document.getElementById('dialog-input').value = defaultValue || '';
-      document.getElementById('dialog').style.display = 'flex';
+      const dialog = document.getElementById('dialog');
+      dialog.style.display = 'flex';
+      // 触发重绘以启动动画
+      dialog.offsetHeight;
+      dialog.classList.add('show');
       dialogCallback = callback;
     }
 
     function closeDialog() {
-      document.getElementById('dialog').style.display = 'none';
+      const dialog = document.getElementById('dialog');
+      dialog.classList.remove('show');
+      setTimeout(() => {
+        dialog.style.display = 'none';
+      }, 300);
       dialogCallback = null;
     }
 
-    function confirmDialog() {
+    function cmDialog() {
       const value = document.getElementById('dialog-input').value.trim();
       if (dialogCallback && value) {
         dialogCallback(value);
@@ -281,7 +335,7 @@
       }
     }
 
-    function delOne(path, sha) {
+    function ZatursuredelOne(path, sha) {
       if (!checkToken()) return;
       if (path.endsWith('index.html')) return alert('index.html不能被删除!')
       if (window.confirm("是否确认删除该文件: " + path)){
@@ -306,7 +360,7 @@
         '请输入仓库地址，格式：{owner}/{repo}',
         baseRepo || '',
         (val) => {
-          localStorage.setItem('GIT_REPO', val);
+          localStorage.setItem('GITHUB_REPO_URL', val);
           baseRepo = val;
           location.reload();
         }
@@ -319,7 +373,7 @@
         '请输入GitHub Token',
         baseToken || '',
         (val) => {
-          localStorage.setItem('GIT_TOKEN', val);
+          localStorage.setItem('GITHUB_TOKEN', val);
           baseToken = val;
           location.reload();
         }
@@ -459,18 +513,27 @@
     }
 
     function showLoading(val) {
-      document.getElementById('loading').innerHTML = val || '处理中...'
-      document.getElementById('loading').className = ''
+      const loading = document.getElementById('loading');
+      loading.innerHTML = val || '处理中...';
+      loading.classList.remove('hide');
+      // 触发重绘以启动动画
+      loading.offsetHeight;
+      loading.classList.add('show');
     }
 
     function hideLoading() {
-      document.getElementById('loading').className = 'hide'
+      const loading = document.getElementById('loading');
+      loading.classList.remove('show');
+      setTimeout(() => {
+        loading.classList.add('hide');
+      }, 300);
     }
 
 
   </script>
 
   <style>
+    /* 图标样式 */
     .gg-folder { transform: scale(var(--ggs,1)) }
     .gg-folder, 
     .gg-folder::after { 
